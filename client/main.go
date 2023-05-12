@@ -59,7 +59,8 @@ func handle(conn *net.TCPConn) {
 	remoteAddr := net.JoinHostPort(frontDomain, "443")
 
 	// Domain front the first request, then just pass subsequent requests directly on same conn
-	req, err := http.ReadRequest(bufio.NewReader(conn))
+	reader := bufio.NewReader(conn)
+	req, err := http.ReadRequest(reader)
 	if err != nil {
 		logger.Printf("Couldn't read request: %s", err)
 	}
@@ -139,56 +140,6 @@ func handle(conn *net.TCPConn) {
 	return
 }
 
-/*
-		if req.Method == "CONNECT" {
-			// Handle HTTPS CONNECT
-			//remoteConn, e := net.DialTimeout("tcp", net.JoinHostPort(req.URL.Hostname(), port), handshakeTimeout)
-			remoteConn, err := net.DialTimeout("tcp", remoteAddr, handshakeTimeout)
-			if err != nil {
-				//TODO send error to client - 5xx?
-				logger.Printf("Couldn't dial remote %s: %s", remoteAddr, err)
-				return
-			}
-			defer remoteConn.Close()
-			err = relay(remoteConn, conn)
-			if err != nil {
-				logger.Printf("Error relaying for %s: %s", remoteAddr, err)
-				return
-			}
-			// After a CONNECT, we don't expect another request. Close.
-			return
-		}
-
-		// If not CONNECT, original request was HTTP.
-		// We're looping here in case client has multiple HTTP requests in one conn,
-		// but our current handling still doesn't support things like streaming responses.
-
-		// Assume  that this was browser -HTTP-> local proxy -HTTPS-front-> remote proxy (this)
-		// Not CONNECT means it was originally HTTP, so use 80.
-		//TODO replace DialTimeout with a Context!
-		remoteConn, err := net.DialTimeout("tcp", remoteAddr, 5*time.Second)
-		if err != nil {
-			//TODO send error to client - 5xx?
-			logger.Printf("Couldn't dial remote %s: %s", remoteAddr, err)
-			continue
-		}
-		defer remoteConn.Close()
-		logger.Printf("%v", req)
-		err = req.Write(remoteConn)
-		if err != nil {
-			//TODO send error to client - Gateway Unavailable?
-			logger.Printf("Couldn't forward to remote %s: %s", remoteAddr, err)
-			continue
-		}
-		_, err = io.Copy(conn, remoteConn)
-		if err != nil {
-			logger.Printf("Couldn't forward response from %s to client: %s", remoteAddr, err)
-			continue
-		}
-	}
-}
-*/
-
 // TODO this needs a context with timeout and cancel
 // TODO confirm this complies with spec!
 // If one side closes, write whatever it sent to the other and quit.
@@ -210,68 +161,3 @@ func relay(dst, src net.Conn) error {
 	}
 	return nil
 }
-
-/*
-	// Check method
-	if r.Method == "CONNECT" {
-		//TODO handle context
-		handleConnect(conn, r)
-		return
-	}
-
-	// Not tunneling, so proxy HTTP
-	host := r.Host
-	logger.Printf("Method: %s Host: %s Path: %s",
-		req.Method, req.Host, xhost, req.URL.Path)
-
-	//logger.Printf("Request: %v\n", r.URL)
-	//logger.Println(r.RequestURI)
-
-	// Re-use incoming request
-	// Replace localhost URL with host-based URL
-	url, err := url.Parse(fmt.Sprintf("https://%s%s", frontDomain, r.URL))
-	if err != nil {
-		logger.Printf("url.Parse: %s", err)
-		return
-	}
-	r.URL = url
-	// Have to strip incoming RequestURI. Not allowed in client requests.
-	r.RequestURI = ""
-
-	//TODO update to use domain fronting
-	// Currently we  enforce HTTPS
-	//tcpAddr, _ := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:443", r.URL.Hostname()))
-	//tcpAddr, _ := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:443", r.Host))
-	//TODO update tls call to use actual hostname again
-	//tcpAddr, _ := net.ResolveTCPAddr("tcp4", "xkcd.com:443")
-	tcpAddr, _ := net.ResolveTCPAddr("tcp", frontDomain+":443")
-	fmt.Printf("%v", tcpAddr)
-	//remote, err := net.DialTCP("tcp",
-	remote, err := tls.Dial("tcp",
-		"xkcd.com:443",
-		nil)
-	if err != nil {
-		logger.Printf("Couldn't dial remote %s: %s", r.URL.Hostname(), err)
-		return
-	}
-	defer remote.Close()
-
-	err = r.Write(remote)
-	if err != nil {
-		logger.Printf("Couldn't write to remote: %s", err)
-		return
-	}
-
-	n, err := io.Copy(conn, remote)
-	if err != nil {
-		logger.Printf("Error during copy after %d bytes written: %s", n, err)
-		return
-	}
-	logger.Printf("Read %d bytes", n)
-}
-
-func handleConnect(conn *net.TCPConn, r *http.Request) {
-	//TODO
-	return
-}
-*/
