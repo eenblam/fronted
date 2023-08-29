@@ -130,7 +130,20 @@ func handle(conn *net.TCPConn) {
 		return
 	}
 
-	err = relay(remoteConn, conn)
+	// Read back request - along with extra headers from Fastly
+	remoteReader := bufio.NewReader(remoteConn)
+	resp, err := http.ReadResponse(remoteReader, req)
+	if err != nil {
+		logger.Printf("Couldn't read response: %s", err)
+	}
+	//TODO confirm 200 Connection established
+	//TODO send client 200 Connection established
+	_, err = fmt.Fprintf(conn, "%s 200 Connection established\r\n\r\n", req.Proto)
+	if err != nil {
+		logger.Printf("Couldn't send 200 to client: %s", err)
+	}
+
+	err = relay(remoteConn, conn, resp.Body)
 	if err != nil {
 		logger.Printf("Error relaying for %s: %s", remoteAddr, err)
 		return
@@ -143,15 +156,16 @@ func handle(conn *net.TCPConn) {
 // TODO this needs a context with timeout and cancel
 // TODO confirm this complies with spec!
 // If one side closes, write whatever it sent to the other and quit.
-func relay(dst, src net.Conn) error {
+func relay(toRemote, local net.Conn, body io.ReadCloser) error {
+	defer body.Close()
 	errChan := make(chan error, 1)
 	go func() {
-		_, err := io.Copy(dst, src)
+		_, err := io.Copy(toRemote, local)
 		errChan <- err
-		dst.SetReadDeadline(time.Now().Add(5 * time.Second))
+		toRemote.SetReadDeadline(time.Now().Add(5 * time.Second))
 	}()
-	_, err := io.Copy(src, dst)
-	src.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, err := io.Copy(local, body)
+	local.SetReadDeadline(time.Now().Add(5 * time.Second))
 	err2 := <-errChan
 	if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 		return err
