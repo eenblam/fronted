@@ -130,19 +130,17 @@ func handle(conn net.Conn) {
 		conn.SetReadDeadline(time.Time{})
 
 		if err := checkAddr(conn.RemoteAddr().String()); err != nil {
-			//fmt.Fprintf(conn, "%s 403 Forbidden\r\n\r\nI don't like you, %s\r\n\r\n", req.Proto, conn.RemoteAddr().String())
 			msg := fmt.Sprintf("%s 403\r\n\r\nI don't like you, %s\r\n\r\n", req.Proto, conn.RemoteAddr().String())
-			//logger.Printf(msg)
+			logger.Printf(msg)
 			conn.Write([]byte(msg))
-			//logger.Printf("Closing. Failed to trust source IP: %s", err)
 			return
 		}
 
-		//TODO check if Host is:
+		// Check if Host is:
 		// backend.fronted.site: healthcheck
 		// fronted.site: initial request proxied through fastly
-		// something else: subsequent HTTP request from pre-existing connection
-		//                 not clear if Fastly will try to Host match these?
+		// TODO something else: subsequent HTTP request from pre-existing connection
+		//                      not clear if Fastly will try to Host match these?
 		if req.Host == "backend.fronted.site" && req.URL.Path == "/healthcheck.txt" && req.Method == "HEAD" {
 			log.Printf("Got healthcheck from %s", conn.RemoteAddr().String())
 			m := "%s 200\r\n\r\ncontent-length: 0\r\n\r\n"
