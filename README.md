@@ -17,13 +17,11 @@ CONNECT requests work as expected, as do other methods (to allow HTTP-only proxy
 **This is just a fun exploratory project.
 Please don't look here for a reliable censorship circumvention method.**
 
-## Why not a `CONNECT` proxy?
+## What stops this from working as a `CONNECT` proxy?
 Originally, I thought it would be neat to provide an HTTP CONNECT proxy
 that would block resistance via domain fronting.
-The only popular edge provider I know of at the moment
-that allows domain fronting is Fastly.
-However, Fastly doesn't allow CONNECT,
-so I tried smuggling methods through.
+The only popular edge provider I know of that currently allows domain fronting is Fastly.
+However, Fastly doesn't allow CONNECT, so I tried smuggling the method through.
 
 That is, whenever the local proxy client saw a CONNECT request for `destination.site`:
 
@@ -31,7 +29,8 @@ That is, whenever the local proxy client saw a CONNECT request for `destination.
 * the client set two custom headers: `X-Host: destination.site` and `X-Method: CONNECT`
 * the client forwarded it to https://fastly.com 
 * Fastly terminated SSL for fastly.com, read `Host: fronted.site`, and forwarded the request to my backend.
-* My backend (the proxy server) read `X-Method` and `X-Host`. For `X-Method: CONNECT`, it would establish a connection to `destination.site` (the value of `X-Host`).
+* My backend (the proxy server) read `X-Method` and `X-Host`.
+    * For `X-Method: CONNECT`, it would establish a connection to `destination.site` (the value of `X-Host`).
 * After a successful connection to `destination.site`, the proxy server would reply to the proxy client (via Fastly) with `HTTP/1.1 200 Connection established` and begin forwarding bytes in each direction.
 
 That allowed me to smuggle CONNECT requests through Fastly!
@@ -57,3 +56,19 @@ transfer-encoding: chunked
 It's possible that I can edit the Varnish config used by Fastly to remove some of these,
 but at the very least `transfer-encoding` is [protected](https://developer.fastly.com/reference/http/http-headers/Transfer-Encoding/)
 from modification in config, so smuggling the CONNECT is a no-go.
+
+
+## Possible workaround
+Note that RFC 9110 states:
+
+> A server MUST NOT send any Transfer-Encoding or Content-Length header fields in a 2xx (Successful) response to CONNECT. A client MUST ignore any Content-Length or Transfer-Encoding header fields received in a successful response to CONNECT.
+
+This means that, while the response from Fastly is technically invalid,
+the client should nonetheless ignore those two response headers.
+There's no reason the client couldn't *also* ignore the other headers provided by Fastly in this case.
+
+So I think the next step could look like this:
+
+* Parse an HTTP header from the connection
+* Check that we have a `200 Connection Established`
+* Ignore any other headers, write only `HTTP/1.1 200 Connection established` and then forward bytes like a normal CONNECT request
