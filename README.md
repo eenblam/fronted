@@ -57,18 +57,33 @@ It's possible that I can edit the Varnish config used by Fastly to remove some o
 but at the very least `transfer-encoding` is [protected](https://developer.fastly.com/reference/http/http-headers/Transfer-Encoding/)
 from modification in config, so smuggling the CONNECT is a no-go.
 
-
-## Possible workaround
+## But can we just discard the headers?
 Note that RFC 9110 states:
 
 > A server MUST NOT send any Transfer-Encoding or Content-Length header fields in a 2xx (Successful) response to CONNECT. A client MUST ignore any Content-Length or Transfer-Encoding header fields received in a successful response to CONNECT.
 
 This means that, while the response from Fastly is technically invalid,
 the client should nonetheless ignore those two response headers.
-There's no reason the client couldn't *also* ignore the other headers provided by Fastly in this case.
+There's no reason the client couldn't *also* ignore the other headers provided by Fastly in this case,
+and only forward the first header line to the browser before proxying bytes.
 
-So I think the next step could look like this:
+There are still two issues, though.
+First, the bytestream from the server is now encapsulated [Chunked Transfer Coding](https://www.rfc-editor.org/rfc/rfc9112#chunked.encoding).
+This isn't really a problem, though:
+we can just read chunks and forward the contents as bytes.
 
-* Parse an HTTP header from the connection
-* Check that we have a `200 Connection Established`
-* Ignore any other headers, write only `HTTP/1.1 200 Connection established` and then forward bytes like a normal CONNECT request
+However, the weirder problem is that we're diving into some rough edges of
+[RFC 9112 Section 2.2](https://www.rfc-editor.org/rfc/rfc9112#name-message-parsing).
+In particular, we *could* change our encapsulating request method to Fastly from GET to POST,
+and then specify no `Content-Length` header.
+
+I'm pretty sure this will happen:
+
+* Fastly receives a POST with no `Content-Length`
+* Fastly will decide the connection can't be persistent, and we'll lose that `Connection: keep-alive` response.
+
+I'm not yet sure about the following without further testing:
+
+* Fastly decides it has to read until the connection is closed, OR it sends a 400 Bad Request
+* In the later case, we're out of luck. In the former, we should take a crack at implementing a chunk decoder!
+
