@@ -76,8 +76,8 @@ func checkAddr(addr string) error {
 
 func main() {
 	addr := flag.String("addr", ":8081", "(address):port")
-	//certFile := flag.String("certfile", "cert.pem", "certificate PEM file")
-	//keyFile := flag.String("keyfile", "key.pem", "key PEM file")
+
+	// To test locally, you can use -certfile cert.pem -keyfile key.pem
 	defaultCert := "/etc/letsencrypt/live/backend.fronted.site/fullchain.pem"
 	defaultKey := "/etc/letsencrypt/live/backend.fronted.site/privkey.pem"
 	certFile := flag.String("certfile", defaultCert, "certificate PEM file")
@@ -91,7 +91,7 @@ func main() {
 		panic(err)
 	}
 	config := &tls.Config{
-		KeyLogWriter: nil, //TODO, see echo
+		KeyLogWriter: nil, // This can be handy for debugging purposes
 		Certificates: []tls.Certificate{tlsCert},
 	}
 	ln, err := tls.Listen("tcp", *addr, config)
