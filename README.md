@@ -1,5 +1,6 @@
 # fronted
-fronted is a multi-layer HTTP proxy.
+fronted is a multi-layer, domain-fronted HTTP CONNECT proxy that, notably, does not work.
+
 The first layer (`client/`) is a proxy meant to run on localhost,
 which handles requests from the user's browser.
 The second layer is a CDN that allows domain fronting; the best example I know of in 2023 is Fastly.
@@ -14,12 +15,11 @@ The server layer resolves the `X-*` headers above to recover the original reques
 then attempts to function as a normal proxy:
 CONNECT requests work as expected, as do other methods (to allow HTTP-only proxying.)
 
-**This is just a fun exploratory project.
-Please don't look here for a reliable censorship circumvention method.**
+Again, this doesn't work. Think of this repo as a blog post about some fun HTTP exploration.
 
 ## What stops this from working as a `CONNECT` proxy?
 Originally, I thought it would be neat to provide an HTTP CONNECT proxy
-that would block resistance via domain fronting.
+that would circumvent DNS- and SNI-based censorship via domain fronting.
 The only popular edge provider I know of that currently allows domain fronting is Fastly.
 However, Fastly doesn't allow CONNECT, so I tried smuggling the method through.
 
@@ -68,7 +68,7 @@ There's no reason the client couldn't *also* ignore the other headers provided b
 and only forward the first header line to the browser before proxying bytes.
 
 There are still two issues, though.
-First, the bytestream from the server is now encapsulated [Chunked Transfer Coding](https://www.rfc-editor.org/rfc/rfc9112#chunked.encoding).
+First, the bytestream from the server is now encapsulated in [Chunked Transfer Coding](https://www.rfc-editor.org/rfc/rfc9112#chunked.encoding).
 This isn't really a problem, though:
 we can just read chunks and forward the contents as bytes.
 
@@ -85,5 +85,5 @@ I'm pretty sure this will happen:
 I'm not yet sure about the following without further testing:
 
 * Fastly decides it has to read until the connection is closed, OR it sends a 400 Bad Request
-* In the later case, we're out of luck. In the former, we should take a crack at implementing a chunk decoder!
+* In the latter case, we're out of luck. In the former, we should take a crack at implementing a chunk decoder!
 
